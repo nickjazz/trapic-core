@@ -1,0 +1,134 @@
+/**
+ * Database Adapter Interface
+ *
+ * Abstracts all database operations so the core MCP tools work with
+ * any database (Postgres, SQLite, MySQL, etc).
+ *
+ * Each method maps to a Supabase RPC in the current implementation.
+ * New adapters implement this interface for their target database.
+ */
+
+// ── Types ────────────────────────────────────────────────────
+
+export interface Trace {
+  id: string;
+  content: string;
+  context: string | null;
+  status: string;
+  type: string;
+  tags: string[];           // includes project:*, branch:*, topic:*, type tags — all in one
+  confidence: string;
+  author: string;
+  created_at: string;
+  updated_at: string;
+  flagged_for_review?: boolean;
+  superseded_by?: string | null;
+}
+
+export interface TraceInsert {
+  content: string;
+  context?: string | null;
+  author: string;
+  tags: string[];           // includes project:*, branch:* alongside topic tags
+  confidence: string;
+}
+
+export interface TraceUpdate {
+  content?: string;
+  context?: string;
+  status?: string;
+  superseded_by?: string;
+  tags?: string[];
+  confidence?: string;
+}
+
+export interface FilterParams {
+  tags?: string[];           // project:*, branch:* → AND logic; others → OR logic
+  status?: string;
+  author_ids: string[];
+  query?: string | null;
+  time_days?: number | null;
+  types?: string[];
+  limit?: number;
+  caller_id?: string | null;
+  exclude_stale?: boolean;
+}
+
+export interface DecayResult {
+  id: string;
+  content: string;
+  type: string;
+  tags: string[];
+  confidence: string;
+  age_days: number;
+  decay_score: number;
+  half_life_days: number;
+  last_reviewed_at: string | null;
+}
+
+export interface HealthData {
+  total_traces: number;
+  active_traces: number;
+  stale_traces: number;
+  health_pct: number;
+  by_type: Record<string, number>;
+  by_confidence: Record<string, number>;
+  recent_7d: number;
+  recent_30d: number;
+}
+
+export interface ContextCandidate {
+  id: string;
+  summary: string;
+  trace_count: number;
+}
+
+// ── Adapter Interface ────────────────────────────────────────
+
+export interface DbAdapter {
+  // ── Trace CRUD ──
+  /** Insert a new trace. Returns { id: string } */
+  insertTrace(trace: TraceInsert): Promise<{ id: string } | null>;
+
+  /** Get a single trace by ID with author visibility check */
+  getTraceFull(traceId: string, authorIds: string[]): Promise<Trace | null>;
+
+  /** Update trace fields. Returns updated trace or null if not found/not authorized */
+  updateTrace(traceId: string, authorId: string, update: TraceUpdate): Promise<Trace | null>;
+
+  /** Filter traces with combined tag/keyword OR logic and scoring */
+  filterTraces(params: FilterParams): Promise<Trace[]>;
+
+  /** Increment access count for traces (fire-and-forget OK) */
+  incrementAccessCount(traceIds: string[]): Promise<void>;
+
+  // ── Team access ──
+  /** Get all visible author IDs (self + team members) */
+  getVisibleAuthorIds(userId: string): Promise<string[]>;
+
+  // ── Decay ──
+  /** Calculate decay scores, return stale traces */
+  calculateDecayScores(params: {
+    author_ids: string[];
+    flag_threshold: number;
+    dry_run: boolean;
+    scope?: string[];
+  }): Promise<DecayResult[]>;
+
+  /** Get trace for stale review (minimal fields) */
+  getTraceForReview(traceId: string, authorIds: string[]): Promise<{ id: string; author: string; content: string } | null>;
+
+  /** Confirm stale trace (reset decay) */
+  confirmStaleTrace(traceId: string, authorIds: string[]): Promise<boolean>;
+
+  /** Deprecate stale trace */
+  deprecateStaleTrace(traceId: string, authorIds: string[]): Promise<boolean>;
+
+  // ── Health ──
+  /** Get knowledge health statistics. tags can include project:* for filtering. */
+  getKnowledgeHealth(tags: string[], authorIds: string[]): Promise<HealthData | null>;
+
+  // ── Context (optional, for recall) ──
+  /** Find candidate context clusters */
+  findCandidateContexts?(tags: string[], authorIds: string[]): Promise<ContextCandidate[]>;
+}

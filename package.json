@@ -1,0 +1,39 @@
+{
+  "name": "trapic-core",
+  "version": "1.0.0",
+  "description": "Open-source AI knowledge memory engine — MCP server with SQLite storage",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "start:dev": "npx tsx src/server.ts"
+  },
+  "keywords": [
+    "mcp",
+    "ai-memory",
+    "knowledge-management",
+    "model-context-protocol",
+    "sqlite",
+    "trapic"
+  ],
+  "author": "Trapic",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nickjazz/trapic-core"
+  },
+  "homepage": "https://trapic.ai",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^3.22.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "12.8.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.3.0"
+  }
+}
