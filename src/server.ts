@@ -13,6 +13,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { SqliteDbAdapter } from "./core/adapters/sqlite-db.js";
+import { MariaDbAdapter } from "./core/adapters/mariadb-db.js";
 import { DbAdapter } from "./core/db-adapter.js";
 import { warnIfNoopHooks } from "./core/hooks.js";
 import { registerCreate } from "./tools/create.js";
@@ -28,16 +29,40 @@ import { createServer as createHttpServer } from "http";
 // ── Config ───────────────────────────────────────────────────
 const PORT = parseInt(process.env.TRAPIC_PORT || "3000", 10);
 const HOST = process.env.TRAPIC_HOST || "127.0.0.1";
+const DB_ADAPTER = process.env.TRAPIC_DB_ADAPTER || "sqlite"; // "sqlite" | "mariadb"
 const DB_PATH = process.env.TRAPIC_DB || "./data/trapic.db";
 const DEFAULT_USER = process.env.TRAPIC_USER || "local-user";
+
+// MariaDB config (used when TRAPIC_DB_ADAPTER=mariadb)
+const MARIADB_HOST = process.env.TRAPIC_MARIADB_HOST || "localhost";
+const MARIADB_PORT = parseInt(process.env.TRAPIC_MARIADB_PORT || "3306", 10);
+const MARIADB_USER = process.env.TRAPIC_MARIADB_USER || "trapic";
+const MARIADB_PASSWORD = process.env.TRAPIC_MARIADB_PASSWORD || "";
+const MARIADB_DATABASE = process.env.TRAPIC_MARIADB_DATABASE || "trapic";
 
 // ── Database ─────────────────────────────────────────────────
 import { mkdirSync } from "fs";
 import { dirname } from "path";
-mkdirSync(dirname(DB_PATH), { recursive: true });
 
-const db: DbAdapter = new SqliteDbAdapter(DB_PATH);
-console.log(`[trapic] SQLite database: ${DB_PATH}`);
+let db: DbAdapter;
+
+async function initDb(): Promise<DbAdapter> {
+  if (DB_ADAPTER === "mariadb") {
+    const adapter = await MariaDbAdapter.create({
+      host: MARIADB_HOST,
+      port: MARIADB_PORT,
+      user: MARIADB_USER,
+      password: MARIADB_PASSWORD,
+      database: MARIADB_DATABASE,
+    });
+    console.log(`[trapic] MariaDB: ${MARIADB_USER}@${MARIADB_HOST}:${MARIADB_PORT}/${MARIADB_DATABASE}`);
+    return adapter;
+  }
+
+  mkdirSync(dirname(DB_PATH), { recursive: true });
+  console.log(`[trapic] SQLite database: ${DB_PATH}`);
+  return new SqliteDbAdapter(DB_PATH);
+}
 
 // ── MCP Server factory ───────────────────────────────────────
 function createMcpServer(userId: string): McpServer {
@@ -83,7 +108,7 @@ const httpServer = createHttpServer(async (req, res) => {
   // Health check
   if (url.pathname === "/health") {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ status: "ok", server: "trapic-mcp", mode: "sqlite" }));
+    res.end(JSON.stringify({ status: "ok", server: "trapic-mcp", mode: DB_ADAPTER }));
     return;
   }
 
@@ -148,12 +173,20 @@ const httpServer = createHttpServer(async (req, res) => {
 });
 
 // ── Start ────────────────────────────────────────────────────
-warnIfNoopHooks();
+async function main() {
+  db = await initDb();
+  warnIfNoopHooks();
 
-httpServer.listen(PORT, HOST, () => {
-  console.log(`[trapic] MCP server running at http://${HOST}:${PORT}/mcp`);
-  console.log(`[trapic] Health check: http://${HOST}:${PORT}/health`);
-  if (HOST === "127.0.0.1") {
-    console.log(`[trapic] Listening on localhost only. Set TRAPIC_HOST=0.0.0.0 to expose.`);
-  }
+  httpServer.listen(PORT, HOST, () => {
+    console.log(`[trapic] MCP server running at http://${HOST}:${PORT}/mcp`);
+    console.log(`[trapic] Health check: http://${HOST}:${PORT}/health`);
+    if (HOST === "127.0.0.1") {
+      console.log(`[trapic] Listening on localhost only. Set TRAPIC_HOST=0.0.0.0 to expose.`);
+    }
+  });
+}
+
+main().catch((err) => {
+  console.error("[trapic] Failed to start:", err);
+  process.exit(1);
 });
