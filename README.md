@@ -8,6 +8,8 @@ Your AI forgets everything between sessions. Trapic Core is an [MCP](https://mod
 
 No vector database. No embeddings. No API costs.
 
+![How Trapic works — one memory layer, every AI assistant remembers](docs/images/how-trapic-works.png)
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
@@ -45,11 +47,9 @@ Save as `.mcp.json` in your project root (Claude Code, Cursor, Windsurf) or add 
 
 ## How It Works
 
-```
-AI writes code  →  captures knowledge  →  stored as structured traces
-AI starts session  →  recalls project context  →  instant briefing
-AI searches  →  tag + keyword query  →  precise results
-```
+Traditional RAG embeds everything into vectors and hopes cosine similarity finds the right answer. Trapic takes a different approach — AI structures knowledge at write time, AI infers the right query at search time. The database in the middle stays simple.
+
+![Query Planner — traditional RAG vs Trapic's LLM query planner](docs/images/query-planner.png)
 
 Each knowledge trace:
 
@@ -339,6 +339,8 @@ npm install && npm run build && npm start
 | `TRAPIC_ADMIN_PASSWORD` | — | Enables Admin UI at `/admin` |
 
 ## Architecture
+
+![Structured search vs vector search — precision over approximation](docs/images/vector-vs-structured.png)
 
 ```
 ┌─────────────┐                    ┌──────────────┐                  ┌──────────────┐
