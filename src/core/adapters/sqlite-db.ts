@@ -183,87 +183,89 @@ export class SqliteDbAdapter implements DbAdapter {
     const conditions: string[] = [];
     const values: unknown[] = [];
 
-    // Status
     if (params.status) {
-      conditions.push("status = ?");
+      conditions.push("t.status = ?");
       values.push(params.status);
     }
-
-    // Author
     if (params.author_ids.length > 0) {
       const ph = params.author_ids.map(() => "?").join(",");
-      conditions.push(`author IN (${ph})`);
+      conditions.push(`t.author IN (${ph})`);
       values.push(...params.author_ids);
     }
-
-    // Types
     if (params.types && params.types.length > 0) {
       const ph = params.types.map(() => "?").join(",");
-      conditions.push(`type IN (${ph})`);
+      conditions.push(`t.type IN (${ph})`);
       values.push(...params.types);
     }
-
-    // Time window (validate to prevent format string injection)
     if (params.time_days) {
       const days = Math.floor(Math.abs(Number(params.time_days)));
       if (days > 0) {
-        conditions.push("created_at >= datetime('now', ?)");
+        conditions.push("t.created_at >= datetime('now', ?)");
         values.push(`-${days} days`);
       }
     }
-
-    // Exclude stale
     if (params.exclude_stale) {
-      conditions.push("flagged_for_review = 0");
+      conditions.push("t.flagged_for_review = 0");
     }
 
-    // Build base query
-    let where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-
-    // Split search tags into scope (AND) and filter (OR) using prefix convention
     const { scope: scopeTags, filter: filterTags } = splitTags(params.tags ?? []);
-
     const limit = params.limit ?? 50;
-    const rows = this.db.prepare(`SELECT * FROM traces ${where} ORDER BY created_at DESC LIMIT ?`)
-      .all(...values, limit * 5) as Record<string, unknown>[]; // over-fetch for post-filtering
+    const queryText = params.query?.trim() || null;
 
-    const queryWords = params.query ? params.query.toLowerCase().split(/\s+/).filter(Boolean) : null;
+    // Step 1: Build FTS rank map when query exists
+    const ftsRanks = new Map<number, number>();
+    if (queryText) {
+      const ftsTerms = queryText.split(/\s+/).filter(Boolean)
+        .map(w => '"' + w.replace(/"/g, '""') + '"').join(" OR ");
+      try {
+        const ftsRows = this.db.prepare(
+          "SELECT rowid, rank FROM traces_fts WHERE traces_fts MATCH ?"
+        ).all(ftsTerms) as { rowid: number; rank: number }[];
+        for (const r of ftsRows) ftsRanks.set(r.rowid, r.rank);
+      } catch { /* invalid FTS query, fall through with empty map */ }
+    }
 
+    // Step 2: Fetch candidates
+    let rows: Record<string, unknown>[];
+    const extraWhere = conditions.length > 0 ? `AND ${conditions.join(" AND ")}` : "";
+    const baseWhere = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    if (queryText && filterTags.length === 0 && ftsRanks.size > 0) {
+      // Query only (no tags): restrict to FTS matches for efficiency
+      const ftsRowIds = [...ftsRanks.keys()];
+      const idsPlaceholder = ftsRowIds.map(() => "?").join(",");
+      rows = this.db.prepare(`
+        SELECT t.rowid AS _rowid, t.* FROM traces t
+        WHERE t.rowid IN (${idsPlaceholder}) ${extraWhere}
+        ORDER BY t.created_at DESC LIMIT ?
+      `).all(...ftsRowIds, ...values, limit * 3) as Record<string, unknown>[];
+    } else {
+      // Tags present or no query: fetch recent candidates
+      rows = this.db.prepare(
+        `SELECT t.rowid AS _rowid, t.* FROM traces t ${baseWhere} ORDER BY t.created_at DESC LIMIT ?`
+      ).all(...values, limit * 3) as Record<string, unknown>[];
+    }
+
+    // Step 3: Score using FTS rank + tag overlap
     const scored: { trace: Trace; score: number }[] = [];
 
     for (const row of rows) {
       const trace = this.toTrace(row);
-
-      // Scope tags: AND logic — trace must contain ALL scope tags
       if (scopeTags.length > 0 && !scopeTags.every(s => trace.tags.includes(s))) continue;
-
-      // Private trace check
       if (trace.tags.some(t => t.startsWith("private:")) && trace.author !== params.caller_id) continue;
 
-      // Filter tags: OR logic — score by overlap count
       let tagScore = 0;
       if (filterTags.length > 0) {
         const matchCount = filterTags.filter(t => trace.tags.includes(t)).length;
         tagScore = matchCount / filterTags.length;
       }
 
-      // Keyword score
-      let textScore = 0;
-      if (queryWords) {
-        const cLower = trace.content.toLowerCase();
-        const xLower = (trace.context || "").toLowerCase();
-        let matched = 0;
-        for (const w of queryWords) {
-          if (cLower.includes(w)) { textScore += 2; matched++; }
-          else if (xLower.includes(w)) { textScore += 1; matched++; }
-        }
-        if (matched > 0) textScore *= (matched / queryWords.length);
-      }
+      // FTS5 rank is negative (more negative = better match), normalize to 0-5
+      const ftsRank = ftsRanks.get(row._rowid as number);
+      const textScore = ftsRank != null ? Math.min(5, Math.max(0.5, -ftsRank)) : 0;
 
-      // Must match at least filter tags or keywords (when provided)
-      if ((filterTags.length > 0 || queryWords) && tagScore === 0 && textScore === 0) continue;
+      if ((filterTags.length > 0 || queryText) && tagScore === 0 && textScore === 0) continue;
 
-      // Combined score
       const ageDays = (Date.now() - new Date(trace.created_at).getTime()) / 86400000;
       const recency = Math.max(0, 1 - ageDays / 365);
       const score = (tagScore * 3) + textScore + recency * 0.5 + (tagScore > 0 ? 1 : 0);

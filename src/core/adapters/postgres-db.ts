@@ -222,19 +222,16 @@ export class PostgresDbAdapter implements DbAdapter {
       conditions.push(`status = $${idx++}`);
       values.push(params.status);
     }
-
     if (params.author_ids.length > 0) {
       const ph = params.author_ids.map(() => `$${idx++}`).join(",");
       conditions.push(`author IN (${ph})`);
       values.push(...params.author_ids);
     }
-
     if (params.types && params.types.length > 0) {
       const ph = params.types.map(() => `$${idx++}`).join(",");
       conditions.push(`type IN (${ph})`);
       values.push(...params.types);
     }
-
     if (params.time_days) {
       const days = Math.floor(Math.abs(Number(params.time_days)));
       if (days > 0) {
@@ -242,26 +239,37 @@ export class PostgresDbAdapter implements DbAdapter {
         values.push(`${days} days`);
       }
     }
-
     if (params.exclude_stale) {
       conditions.push("flagged_for_review = FALSE");
     }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const { scope: scopeTags, filter: filterTags } = splitTags(params.tags ?? []);
-
     const limit = params.limit ?? 50;
+    const queryText = params.query?.trim() || null;
+
+    // FTS: use tsvector for keyword search
+    let ftsRankExpr = "0::float AS fts_rank";
+    let queryParamIdx: number | null = null;
+    if (queryText) {
+      queryParamIdx = idx++;
+      values.push(queryText);
+      ftsRankExpr = `ts_rank(search_vec, plainto_tsquery('simple', $${queryParamIdx})) AS fts_rank`;
+      // Query only (no tags): use FTS as hard filter for efficiency
+      if (filterTags.length === 0) {
+        conditions.push(`search_vec @@ plainto_tsquery('simple', $${queryParamIdx})`);
+      }
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const { rows } = await this.pool.query(
-      `SELECT * FROM traces ${where} ORDER BY created_at DESC LIMIT $${idx}`,
-      [...values, limit * 5]
+      `SELECT *, ${ftsRankExpr} FROM traces ${where} ORDER BY created_at DESC LIMIT $${idx}`,
+      [...values, limit * 3]
     );
 
-    const queryWords = params.query ? params.query.toLowerCase().split(/\s+/).filter(Boolean) : null;
     const scored: { trace: Trace; score: number }[] = [];
 
     for (const row of rows) {
       const trace = this.toTrace(row);
-
       if (scopeTags.length > 0 && !scopeTags.every(s => trace.tags.includes(s))) continue;
       if (trace.tags.some(t => t.startsWith("private:")) && trace.author !== params.caller_id) continue;
 
@@ -271,19 +279,10 @@ export class PostgresDbAdapter implements DbAdapter {
         tagScore = matchCount / filterTags.length;
       }
 
-      let textScore = 0;
-      if (queryWords) {
-        const cLower = trace.content.toLowerCase();
-        const xLower = (trace.context || "").toLowerCase();
-        let matched = 0;
-        for (const w of queryWords) {
-          if (cLower.includes(w)) { textScore += 2; matched++; }
-          else if (xLower.includes(w)) { textScore += 1; matched++; }
-        }
-        if (matched > 0) textScore *= (matched / queryWords.length);
-      }
+      // ts_rank returns 0-1 range, scale to match tag scoring range
+      const textScore = queryText ? Math.min(5, (row.fts_rank as number) * 10) : 0;
 
-      if ((filterTags.length > 0 || queryWords) && tagScore === 0 && textScore === 0) continue;
+      if ((filterTags.length > 0 || queryText) && tagScore === 0 && textScore === 0) continue;
 
       const ageDays = (Date.now() - new Date(trace.created_at).getTime()) / 86400000;
       const recency = Math.max(0, 1 - ageDays / 365);
