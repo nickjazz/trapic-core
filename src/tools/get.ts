@@ -39,6 +39,7 @@ export function registerGet(server: McpServer, userId: string | null, db: DbAdap
           `confidence: ${trace.confidence} | ${trace.created_at}`,
           `tags: ${tags}`,
           `author: ${trace.author}`,
+          trace.caused_by?.length ? `caused_by: ${trace.caused_by.join(", ")}` : null,
         ].filter(Boolean);
 
         return { content: [{ type: "text" as const, text: lines.join("\n") }] };

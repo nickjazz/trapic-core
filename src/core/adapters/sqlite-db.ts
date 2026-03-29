@@ -111,6 +111,9 @@ export class SqliteDbAdapter implements DbAdapter {
         INSERT INTO traces_fts(rowid, content, context) VALUES (new.rowid, new.content, new.context);
       END;
     `);
+
+    // Migration: add caused_by column if missing
+    try { this.db.exec("ALTER TABLE traces ADD COLUMN caused_by TEXT NOT NULL DEFAULT '[]'"); } catch { /* already exists */ }
   }
 
   private parseTags(raw: string): string[] {
@@ -131,6 +134,7 @@ export class SqliteDbAdapter implements DbAdapter {
       updated_at: (row.updated_at as string) ?? row.created_at as string,
       flagged_for_review: (row.flagged_for_review as number) === 1,
       superseded_by: (row.superseded_by as string) ?? null,
+      caused_by: this.parseTags(row.caused_by as string ?? "[]"),
     };
   }
 
@@ -139,11 +143,11 @@ export class SqliteDbAdapter implements DbAdapter {
   async insertTrace(trace: TraceInsert): Promise<{ id: string } | null> {
     const id = randomUUID();
     const stmt = this.db.prepare(`
-      INSERT INTO traces (id, content, context, type, author, tags, confidence)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO traces (id, content, context, type, author, tags, confidence, caused_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(id, trace.content, trace.context ?? null, trace.type ?? "decision",
-      trace.author, JSON.stringify(trace.tags), trace.confidence);
+      trace.author, JSON.stringify(trace.tags), trace.confidence, JSON.stringify(trace.caused_by ?? []));
     return { id };
   }
 

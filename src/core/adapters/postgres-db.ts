@@ -109,6 +109,9 @@ export class PostgresDbAdapter implements DbAdapter {
     await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_traces_tags ON traces USING GIN(tags)`);
     await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_traces_search ON traces USING GIN(search_vec)`);
 
+    await this.pool.query(`ALTER TABLE traces ADD COLUMN IF NOT EXISTS caused_by UUID[] NOT NULL DEFAULT '{}'`);
+    await this.pool.query(`CREATE INDEX IF NOT EXISTS idx_traces_caused_by ON traces USING GIN(caused_by)`);
+
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id UUID NOT NULL PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -161,6 +164,7 @@ export class PostgresDbAdapter implements DbAdapter {
       updated_at: new Date(row.updated_at ?? row.created_at).toISOString(),
       flagged_for_review: row.flagged_for_review === true,
       superseded_by: row.superseded_by ?? null,
+      caused_by: (row.caused_by as string[]) ?? [],
     };
   }
 
@@ -169,8 +173,8 @@ export class PostgresDbAdapter implements DbAdapter {
   async insertTrace(trace: TraceInsert): Promise<{ id: string } | null> {
     const id = randomUUID();
     await this.pool.query(
-      `INSERT INTO traces (id, content, context, type, author, tags, confidence) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, trace.content, trace.context ?? null, trace.type ?? "decision", trace.author, JSON.stringify(trace.tags), trace.confidence]
+      `INSERT INTO traces (id, content, context, type, author, tags, confidence, caused_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [id, trace.content, trace.context ?? null, trace.type ?? "decision", trace.author, JSON.stringify(trace.tags), trace.confidence, trace.caused_by ?? []]
     );
     return { id };
   }

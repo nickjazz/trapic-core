@@ -23,6 +23,7 @@ export interface Trace {
   updated_at: string;
   flagged_for_review?: boolean;
   superseded_by?: string | null;
+  caused_by?: string[];
 }
 
 export interface TraceInsert {
@@ -32,6 +33,7 @@ export interface TraceInsert {
   author: string;
   tags: string[];           // includes project:*, branch:* alongside topic tags
   confidence: string;
+  caused_by?: string[];     // IDs of traces that caused/led to this one
 }
 
 export interface TraceUpdate {

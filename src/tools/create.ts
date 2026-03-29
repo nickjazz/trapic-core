@@ -24,6 +24,9 @@ export function registerCreate(server: McpServer, userId: string | null, db: DbA
       confidence: z.enum(["high", "medium", "low"]).default("medium").describe(
         "How confident we are in this trace. 對此 trace 的信心程度"
       ),
+      caused_by: z.array(z.string()).max(10).default([]).describe(
+        "IDs of traces that caused/led to this one — builds a reasoning chain"
+      ),
     },
     async (params) => {
       try {
@@ -47,6 +50,7 @@ export function registerCreate(server: McpServer, userId: string | null, db: DbA
           author: userId,
           tags: params.tags,
           confidence: params.confidence,
+          caused_by: params.caused_by.length > 0 ? params.caused_by : undefined,
         });
 
         if (!result) {

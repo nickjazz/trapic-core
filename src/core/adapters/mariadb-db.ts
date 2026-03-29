@@ -130,6 +130,8 @@ export class MariaDbAdapter implements DbAdapter {
         UNIQUE KEY uq_team_user (team_id, user_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+
+    try { await this.pool.execute("ALTER TABLE traces ADD COLUMN caused_by JSON NOT NULL DEFAULT ('[]')"); } catch { /* already exists */ }
   }
 
   private parseTags(raw: unknown): string[] {
@@ -160,6 +162,7 @@ export class MariaDbAdapter implements DbAdapter {
       updated_at: new Date(row.updated_at ?? row.created_at).toISOString(),
       flagged_for_review: row.flagged_for_review === 1,
       superseded_by: row.superseded_by ?? null,
+      caused_by: this.parseTags(row.caused_by),
     };
   }
 
@@ -168,8 +171,8 @@ export class MariaDbAdapter implements DbAdapter {
   async insertTrace(trace: TraceInsert): Promise<{ id: string } | null> {
     const id = randomUUID();
     await this.pool.execute(
-      `INSERT INTO traces (id, content, context, type, author, tags, confidence) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [id, trace.content, trace.context ?? null, trace.type ?? "decision", trace.author, JSON.stringify(trace.tags), trace.confidence]
+      `INSERT INTO traces (id, content, context, type, author, tags, confidence, caused_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, trace.content, trace.context ?? null, trace.type ?? "decision", trace.author, JSON.stringify(trace.tags), trace.confidence, JSON.stringify(trace.caused_by ?? [])]
     );
     return { id };
   }
