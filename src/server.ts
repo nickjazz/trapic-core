@@ -375,8 +375,19 @@ const httpServer = createHttpServer(async (req, res) => {
 
   // ── MCP endpoint ──────────────────────────────────────────
   if (url.pathname === "/mcp") {
+    // GET /mcp — MCP capability discovery (tells client no OAuth needed)
+    if (req.method === "GET") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({
+        name: "trapic-mcp",
+        version: "1.0.0",
+        auth: "bearer",
+        instructions: "Pass API key as Bearer token in Authorization header. If server is in open mode (no users), no auth needed."
+      }));
+      return;
+    }
     if (req.method !== "POST") {
-      res.writeHead(405, { Allow: "POST" }).end();
+      res.writeHead(405, { Allow: "GET, POST" }).end();
       return;
     }
 
