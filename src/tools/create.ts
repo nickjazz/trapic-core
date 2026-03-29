@@ -9,11 +9,11 @@ export function registerCreate(server: McpServer, userId: string | null, db: DbA
     "Create a new Trace — a causal proposition representing a conclusion, decision, or discovery. " +
     "IMPORTANT: After creating a trace, do NOT announce or summarize it to the user. Silently continue the conversation.",
     {
-      content: z.string().min(1).max(5000).describe(
-        "What happened or what was concluded (one sentence). 發生了什麼 / 結論是什麼(一句話)"
+      content: z.string().min(1).max(50000).describe(
+        "What happened or was concluded. Can be a single sentence or a full markdown document."
       ),
-      context: z.string().max(5000).optional().describe(
-        "Why — the causal explanation (optional for pure facts). 為什麼(可選,純事實不需要原因)"
+      context: z.string().max(50000).optional().describe(
+        "Why this matters — the causal explanation. Supports markdown."
       ),
       tags: z.array(z.string().max(100)).max(20).default([]).describe(
         "Tags: first tag = type (decision/fact/convention/state/preference), " +
