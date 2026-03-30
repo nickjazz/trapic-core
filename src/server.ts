@@ -23,6 +23,7 @@ import { registerUpdate } from "./tools/update.js";
 import { registerRecall } from "./tools/recall.js";
 import { registerHealth } from "./tools/health.js";
 import { registerDecay } from "./tools/decay.js";
+import { registerRefresh } from "./tools/refresh.js";
 import { registerImportGit } from "./tools/import-git.js";
 import { adminHtml } from "./admin-ui.js";
 import { createServer as createHttpServer, IncomingMessage } from "http";
@@ -97,6 +98,7 @@ function createMcpServer(userId: string): McpServer {
   registerGet(server, userId, db);
   registerUpdate(server, userId, db);
   registerRecall(server, userId, db);
+  registerRefresh(server, userId, db);
   registerHealth(server, userId, db);
   registerDecay(server, userId, db);
   registerImportGit(server, userId, db);
