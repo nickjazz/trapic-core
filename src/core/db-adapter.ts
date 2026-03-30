@@ -19,6 +19,7 @@ export interface Trace {
   tags: string[];           // includes project:*, branch:*, topic:*, type tags — all in one
   confidence: string;
   author: string;
+  author_name?: string;
   created_at: string;
   updated_at: string;
   flagged_for_review?: boolean;

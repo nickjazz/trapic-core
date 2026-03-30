@@ -160,6 +160,7 @@ export class PostgresDbAdapter implements DbAdapter {
       tags: this.parseTags(row.tags),
       confidence: row.confidence,
       author: row.author,
+      author_name: row.author_name ?? undefined,
       created_at: new Date(row.created_at).toISOString(),
       updated_at: new Date(row.updated_at ?? row.created_at).toISOString(),
       flagged_for_review: row.flagged_for_review === true,
@@ -183,7 +184,7 @@ export class PostgresDbAdapter implements DbAdapter {
     if (authorIds.length === 0) return null;
     const placeholders = authorIds.map((_, i) => `$${i + 2}`).join(",");
     const { rows } = await this.pool.query(
-      `SELECT * FROM traces WHERE id = $1 AND author IN (${placeholders})`,
+      `SELECT t.*, u.name AS author_name FROM traces t LEFT JOIN users u ON u.id = t.author WHERE t.id = $1 AND t.author IN (${placeholders})`,
       [traceId, ...authorIds]
     );
     return rows.length > 0 ? this.toTrace(rows[0]) : null;
@@ -266,7 +267,7 @@ export class PostgresDbAdapter implements DbAdapter {
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const { rows } = await this.pool.query(
-      `SELECT *, ${ftsRankExpr} FROM traces ${where} ORDER BY created_at DESC LIMIT $${idx}`,
+      `SELECT traces.*, u.name AS author_name, ${ftsRankExpr} FROM traces LEFT JOIN users u ON u.id = traces.author ${where} ORDER BY created_at DESC LIMIT $${idx}`,
       [...values, limit * 3]
     );
 

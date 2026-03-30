@@ -158,6 +158,7 @@ export class MariaDbAdapter implements DbAdapter {
       tags: this.parseTags(row.tags),
       confidence: row.confidence,
       author: row.author,
+      author_name: row.author_name ?? undefined,
       created_at: new Date(row.created_at).toISOString(),
       updated_at: new Date(row.updated_at ?? row.created_at).toISOString(),
       flagged_for_review: row.flagged_for_review === 1,
@@ -181,7 +182,7 @@ export class MariaDbAdapter implements DbAdapter {
     if (authorIds.length === 0) return null;
     const placeholders = authorIds.map(() => "?").join(",");
     const [rows] = await this.pool.execute<RowDataPacket[]>(
-      `SELECT * FROM traces WHERE id = ? AND author IN (${placeholders})`,
+      `SELECT t.*, u.name AS author_name FROM traces t LEFT JOIN users u ON u.id = t.author WHERE t.id = ? AND t.author IN (${placeholders})`,
       [traceId, ...authorIds]
     );
     return rows.length > 0 ? this.toTrace(rows[0]) : null;
@@ -261,7 +262,7 @@ export class MariaDbAdapter implements DbAdapter {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     // MySQL params are positional: SELECT params first, then WHERE params, then LIMIT
     const [rows] = await this.pool.execute<RowDataPacket[]>(
-      `SELECT t.*, ${ftsRankExpr} FROM traces t ${where} ORDER BY t.created_at DESC LIMIT ?`,
+      `SELECT t.*, u.name AS author_name, ${ftsRankExpr} FROM traces t LEFT JOIN users u ON u.id = t.author ${where} ORDER BY t.created_at DESC LIMIT ?`,
       [...selectValues, ...values, limit * 3]
     );
 

@@ -130,6 +130,7 @@ export class SqliteDbAdapter implements DbAdapter {
       tags: this.parseTags(row.tags as string),
       confidence: row.confidence as string,
       author: row.author as string,
+      author_name: (row.author_name as string) ?? undefined,
       created_at: row.created_at as string,
       updated_at: (row.updated_at as string) ?? row.created_at as string,
       flagged_for_review: (row.flagged_for_review as number) === 1,
@@ -154,7 +155,9 @@ export class SqliteDbAdapter implements DbAdapter {
   async getTraceFull(traceId: string, authorIds: string[]): Promise<Trace | null> {
     const placeholders = authorIds.map(() => "?").join(",");
     const row = this.db.prepare(`
-      SELECT * FROM traces WHERE id = ? AND author IN (${placeholders})
+      SELECT t.*, u.name AS author_name FROM traces t
+      LEFT JOIN users u ON u.id = t.author
+      WHERE t.id = ? AND t.author IN (${placeholders})
     `).get(traceId, ...authorIds) as Record<string, unknown> | undefined;
     return row ? this.toTrace(row) : null;
   }
@@ -239,14 +242,14 @@ export class SqliteDbAdapter implements DbAdapter {
       const ftsRowIds = [...ftsRanks.keys()];
       const idsPlaceholder = ftsRowIds.map(() => "?").join(",");
       rows = this.db.prepare(`
-        SELECT t.rowid AS _rowid, t.* FROM traces t
+        SELECT t.rowid AS _rowid, t.*, u.name AS author_name FROM traces t LEFT JOIN users u ON u.id = t.author
         WHERE t.rowid IN (${idsPlaceholder}) ${extraWhere}
         ORDER BY t.created_at DESC LIMIT ?
       `).all(...ftsRowIds, ...values, limit * 3) as Record<string, unknown>[];
     } else {
       // Tags present or no query: fetch recent candidates
       rows = this.db.prepare(
-        `SELECT t.rowid AS _rowid, t.* FROM traces t ${baseWhere} ORDER BY t.created_at DESC LIMIT ?`
+        `SELECT t.rowid AS _rowid, t.*, u.name AS author_name FROM traces t LEFT JOIN users u ON u.id = t.author ${baseWhere} ORDER BY t.created_at DESC LIMIT ?`
       ).all(...values, limit * 3) as Record<string, unknown>[];
     }
 
