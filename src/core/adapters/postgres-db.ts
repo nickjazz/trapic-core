@@ -314,14 +314,14 @@ export class PostgresDbAdapter implements DbAdapter {
 
   async getVisibleAuthorIds(userId: string): Promise<string[]> {
     const { rows } = await this.pool.query(
-      `SELECT DISTINCT u2.name FROM users u1
+      `SELECT DISTINCT u2.id FROM users u1
        JOIN team_members tm1 ON tm1.user_id = u1.id
        JOIN team_members tm2 ON tm1.team_id = tm2.team_id
        JOIN users u2 ON tm2.user_id = u2.id
-       WHERE u1.name = $1`,
+       WHERE u1.id = $1`,
       [userId]
     );
-    const ids = rows.map((r: pg.QueryResultRow) => r.name as string);
+    const ids = rows.map((r: pg.QueryResultRow) => r.id as string);
     if (!ids.includes(userId)) ids.push(userId);
     return ids;
   }

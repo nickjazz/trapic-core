@@ -309,14 +309,14 @@ export class MariaDbAdapter implements DbAdapter {
 
   async getVisibleAuthorIds(userId: string): Promise<string[]> {
     const [rows] = await this.pool.execute<RowDataPacket[]>(
-      `SELECT DISTINCT u2.name FROM users u1
+      `SELECT DISTINCT u2.id FROM users u1
        JOIN team_members tm1 ON tm1.user_id = u1.id
        JOIN team_members tm2 ON tm1.team_id = tm2.team_id
        JOIN users u2 ON tm2.user_id = u2.id
-       WHERE u1.name = ?`,
+       WHERE u1.id = ?`,
       [userId]
     );
-    const ids = rows.map(r => r.name as string);
+    const ids = rows.map(r => r.id as string);
     if (!ids.includes(userId)) ids.push(userId);
     return ids;
   }

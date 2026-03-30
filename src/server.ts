@@ -179,7 +179,7 @@ async function authenticate(authHeader: string | null): Promise<AuthResult> {
   if (userCount > 0) {
     const user = await db.getUserByApiKey(token);
     if (user) {
-      return { ok: true, userId: user.name };
+      return { ok: true, userId: user.id };
     }
   }
 

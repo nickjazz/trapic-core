@@ -294,16 +294,15 @@ export class SqliteDbAdapter implements DbAdapter {
   // ── Team access ──
 
   async getVisibleAuthorIds(userId: string): Promise<string[]> {
-    // userId here is the user's name (used as trace author).
-    // Find teammates by looking up the user's id first, then finding shared teams.
+    // userId is now the user's UUID (not name)
     const rows = this.db.prepare(`
-      SELECT DISTINCT u2.name FROM users u1
+      SELECT DISTINCT u2.id FROM users u1
       JOIN team_members tm1 ON tm1.user_id = u1.id
       JOIN team_members tm2 ON tm1.team_id = tm2.team_id
       JOIN users u2 ON tm2.user_id = u2.id
-      WHERE u1.name = ?
-    `).all(userId) as { name: string }[];
-    const ids = rows.map(r => r.name);
+      WHERE u1.id = ?
+    `).all(userId) as { id: string }[];
+    const ids = rows.map(r => r.id);
     if (!ids.includes(userId)) ids.push(userId);
     return ids;
   }
