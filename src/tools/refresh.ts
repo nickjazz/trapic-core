@@ -7,7 +7,7 @@ import { splitTags } from "../core/tag-utils.js";
 /**
  * trapic-refresh — mid-session differential update.
  *
- * Unlike trapic-recall (full briefing at session start), refresh returns
+ * Unlike trapic recall (full briefing at session start), refresh returns
  * only traces created or updated SINCE a given timestamp. Designed to be
  * called periodically (e.g. every 30 min) to keep context fresh without
  * reloading everything.

@@ -6,8 +6,8 @@ import { getVisibleAuthors } from "../core/team-access.js";
 export function registerGet(server: McpServer, userId: string | null, db: DbAdapter): void {
   server.tool(
     "trapic-get",
-    "Get full content of a single trace by ID. Use after trapic-search to read complete details. " +
-    "用 ID 取得單筆 trace 的完整內容。在 trapic-search 找到目標後使用。",
+    "Get full content of a single trace by ID. Use after trapic search to read complete details. " +
+    "用 ID 取得單筆 trace 的完整內容。在 trapic search 找到目標後使用。",
     {
       trace_id: z.string().uuid().describe(
         "ID of the trace to retrieve. 要取得的 trace ID"

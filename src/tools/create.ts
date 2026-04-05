@@ -62,7 +62,7 @@ export function registerCreate(server: McpServer, userId: string | null, db: DbA
         "Traces with private: tags are auto-set to private. Default: public."
       ),
       team_id: z.string().uuid().optional().describe(
-        "Team ID from session start (trapic-recall or trapic-my-teams). " +
+        "Team ID from session start (trapic recall or trapic my-teams). " +
         "AI should remember this from the session and pass it automatically. " +
         "If omitted: 1 team = auto-fill, 2+ teams = returns error asking to pick."
       ),
